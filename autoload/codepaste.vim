@@ -44,8 +44,6 @@
 "     default value is 1.
 "
 " Todo:
-"   * urlencode
-"   * vitual mode
 "   * clipboard
 "   * irc
 "   * multibuffer
@@ -59,7 +57,7 @@ set cpo&vim
 " default options
 
 if !exists('g:codepaste_put_url_to_clipboard_after_post')
-    let g:codepaste_put_url_to_clipboard_after_post = 1
+    let g:codepaste_put_url_to_clipboard_after_post = 0
 endif
 
 if !exists('g:codepaste_curl_options')
@@ -118,15 +116,15 @@ function! codepaste#Codepaste(count, line1, line2, ...)
       if len(url) > 0
           " post to irc channel
           if g:codepaste_put_url_to_irc_channel_after_post == 1
-              echo "[info] cannot use irc post yet"
+              s:post_irc_channel(url)
+              " echo '[info] cannot use irc post yet'
           endif
           " add to clipboard
           if g:codepaste_put_url_to_clipboard_after_post == 1
-              echo "[info] cannot use add clipboard yet"
+              echo '[info] cannot use add clipboard yet'
           endif
       endif
   endif
-
 endfunction
 
 " For fix arguments, string -> list
@@ -144,7 +142,7 @@ function! s:CodepastePost(content)
 
     let nickname = ""
     let title    = ""
-    let input    = a:content
+    let input    = s:encodeURIComponent(a:content)
 
 
     " make url
@@ -152,34 +150,69 @@ function! s:CodepastePost(content)
                 \ '?nickname=' . nickname .
                 \ '&title='    . title .
                 \ '&input='    . input
-    echo url
+    "echo url
 
     " execute curl command
     echo "Postting it to codepaste ..."
-    let res = system('curl -i '.url)
+    let res = system('curl -i "'. url .'"')
 
     " get http header
     let headers = split(res, '\(\r\?\n\|\r\n\?\)')
     let location = matchstr(headers, '^Location:')
     let location = matchstr(location, '^[^:]\+: \zs.*')
 
-    "echo location
-    let location = "http://klab.klab.org/cp/karino"
-
     "
     "if len(location)>0
     if len(location) > 0 && location =~ '^\(http\|https\):\/\/klab\.klab\.org\/'
-        "redraw
+        redraw
         echomsg 'Done: '.location
+        echomsg ''
     else
         echohl ErrorMsg | echomsg 'Post failed' | echohl None
     endif
 
     " return
     return location
-
 endfunction
 
+" URL Encode
+
+function! s:encodeURIComponent(instr)
+  let instr = iconv(a:instr, &enc, "utf-8")
+  let len = strlen(instr)
+  let i = 0
+  let outstr = ''
+  while i < len
+    let ch = instr[i]
+    if ch =~# '[0-9A-Za-z-._~!''()*]'
+      let outstr = outstr . ch
+    elseif ch == ' '
+      let outstr = outstr . '+'
+    else
+      let outstr = outstr . '%' . substitute('0' . s:nr2hex(char2nr(ch)), '^.*\(..\)$', '\1', '')
+    endif
+    let i = i + 1
+  endwhile
+  return outstr
+endfunction
+
+" For URL Encode
+
+function! s:nr2hex(nr)
+  let n = a:nr
+  let r = ""
+  while n
+    let r = '0123456789ABCDEF'[n % 16] . r
+    let n = n / 16
+  endwhile
+  return r
+endfunction
+
+" Post to irc channel
+
+function! s:post_irc_channel(url)
+    echo "url : " . a:url
+endfunction
 
 
 " what is this ? by karino
