@@ -98,6 +98,7 @@ function! codepaste#Codepaste(count, line1, line2, ...)
       if a:count < 1
           " target is all lenge
           let content = join(getline(a:line1, a:line2), "\n")
+          echo "file"
 
       else
           " target is selected lenge
@@ -106,7 +107,7 @@ function! codepaste#Codepaste(count, line1, line2, ...)
           silent! normal! gvy
           let content = @"
           call setreg('"', save_regcont, save_regtype)
-          "echo "[info] use vitsual mode"
+          echo "[info] use vitsual mode"
       endif
 
       " execute post
@@ -150,11 +151,11 @@ function! s:CodepastePost(content)
                 \ '?nickname=' . nickname .
                 \ '&title='    . title .
                 \ '&input='    . input
-    "echo url
 
     " execute curl command
     echo "Postting it to codepaste ..."
     let res = system('curl -i "'. url .'"')
+    echo res
 
     " get http header
     let headers = split(res, '\(\r\?\n\|\r\n\?\)')
