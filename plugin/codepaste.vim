@@ -15,4 +15,6 @@ if !executable('curl')
     finish
 endif
 
-command! -nargs=? -range=% Codepaste :call codepaste#Codepaste(<count>,<line1>,<line2>,<f-args>)
+
+"command! -nargs=? -range=% Codepaste :call codepaste#Codepaste(<count>,<line1>,<line2>,<f-args>)
+command! -nargs=? -complete=customlist,codepaste#complete_source -range=% Codepaste :call codepaste#Codepaste(<count>,<line1>,<line2>,<f-args>)

@@ -54,24 +54,35 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 
-" default options
-
-if !exists('g:codepaste_put_url_to_clipboard_after_post')
-    let g:codepaste_put_url_to_clipboard_after_post = 0
-endif
-
-if !exists('g:codepaste_curl_options')
-    let g:codepaste_curl_options = ""
-endif
-
-if !exists('g:codepaste_put_url_to_irc_channel_after_post')
-    let g:codepaste_put_url_to_irc_channel_after_post = 0
-endif
-
 " Codepaste
 
 function! codepaste#Codepaste(count, line1, line2, ...)
   redraw
+
+  " default options
+  if !exists('g:codepaste_put_url_to_clipboard_after_post')
+      let g:codepaste_put_url_to_clipboard_after_post = 0
+  endif
+  if !exists('g:codepaste_curl_options')
+      let g:codepaste_curl_options = ""
+  endif
+  if !exists('g:codepaste_put_url_to_irc_channel_after_post')
+      let g:codepaste_put_url_to_irc_channel_after_post = 0
+  endif
+
+  " default irc data
+  if ! exists('g:codepaste_irc_server')
+      let g:codepaste_irc_server = 'irc.klab.org'
+  endif
+  if ! exists('g:codepaste_irc_port')
+      let g:codepaste_irc_port = 6667
+  endif
+  if ! exists('g:codepaste_irc_channel')
+      let g:codepaste_irc_channel = '#karino'
+  endif
+  if ! exists('g:codepaste_irc_nickname')
+      let g:codepaste_irc_nickname = 'karino-t'
+  endif
 
   " get bufname
   let bufname = bufname("%")
@@ -112,12 +123,17 @@ function! codepaste#Codepaste(count, line1, line2, ...)
 
       " execute post
       let url = s:CodepastePost(content)
+      echo "get url"
 
       " after post
       if len(url) > 0
           " post to irc channel
           if g:codepaste_put_url_to_irc_channel_after_post == 1
-              s:post_irc_channel(url)
+              let res = s:post_irc_channel(g:codepaste_irc_server,
+                                         \ g:codepaste_irc_port,
+                                         \ g:codepaste_irc_channel,
+                                         \ g:codepaste_irc_nickname,
+                                         \ url)
               " echo '[info] cannot use irc post yet'
           endif
           " add to clipboard
@@ -144,18 +160,27 @@ function! s:CodepastePost(content)
     let nickname = ""
     let title    = ""
     let input    = s:encodeURIComponent(a:content)
+    "let input    = a:content
 
 
     " make url
-    let url = 'http://klab.klab.org/cp/store' .
-                \ '?nickname=' . nickname .
-                \ '&title='    . title .
-                \ '&input='    . input
+    " let url = 'http://klab.klab.org/cp/store' .
+    "             \ '?nickname=' . nickname .
+    "             \ '&title='    . title .
+    "             \ '&input='    . input
+
+    " make url
+    let url = ' "http://klab.klab.org/cp/store"'
+    let nickname = ' -d nickname=' . nickname
+    let title    = ' -d title='    . title
+    let input    = ' -d input='    . input
+    let curlcmd = 'curl -i --data-urlencode '. nickname . title . input . url
+    echo curlcmd
 
     " execute curl command
     echo "Postting it to codepaste ..."
-    let res = system('curl -i "'. url .'"')
-    echo res
+    "let res = system('curl -i --data-urlencode '.. url)
+    let res = system(curlcmd)
 
     " get http header
     let headers = split(res, '\(\r\?\n\|\r\n\?\)')
@@ -211,10 +236,46 @@ endfunction
 
 " Post to irc channel
 
-function! s:post_irc_channel(url)
-    echo "url : " . a:url
+function! s:post_irc_channel(server, port, channel, nickname, cpurl)
+
+    echo a:server
+    echo a:port
+    echo a:channel
+    echo a:nickname
+    echo a:url
+
+    "
+    let sock = vimproc#socket_open(a:server, a:port)
+
+    " login
+    call sock.write("GET /HTTP/1.0\r\n\r\n")
+    " join
+    call sock.write("GET /HTTP/1.0\r\n\r\n")
+    " post
+    call sock.write("GET /HTTP/1.0\r\n\r\n")
+
+    call sock.close()
+    return 1
+
+    " socket open
+    " let sock = vimproc#socket_open("www.yahoo.com", 80)
+    " call sock.write("GET /HTTP/1.0\r\n\r\n")
+    " let res=""
+    " while !sock.eof
+    "     let res .= sock.read()
+    " endwhile
+    " call sock.close()
+    " for line in split(res, '\r\n\|\r\|\n')
+    "     echo line
+    " endfor
+    " return 1
 endfunction
 
+" Complete List
+
+function! codepaste#complete_source(arglead, cmdline, cursorpos)
+   return ['-i','-m','-c']
+endfunction
 
 " what is this ? by karino
 let &cpo = s:save_cpo
