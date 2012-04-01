@@ -61,13 +61,13 @@ function! codepaste#Codepaste(count, line1, line2, ...)
 
   " default options
   if !exists('g:codepaste_put_url_to_clipboard_after_post')
-      let g:codepaste_put_url_to_clipboard_after_post = 0
+      let codepaste_put_url_to_clipboard_after_post = 0
   endif
   if !exists('g:codepaste_curl_options')
-      let g:codepaste_curl_options = ""
+      let codepaste_curl_options = ""
   endif
   if !exists('g:codepaste_put_url_to_irc_channel_after_post')
-      let g:codepaste_put_url_to_irc_channel_after_post = 0
+      let codepaste_put_url_to_irc_channel_after_post = 0
   endif
 
   " default irc data
@@ -92,11 +92,11 @@ function! codepaste#Codepaste(count, line1, line2, ...)
   let args = (a:0 > 0) ? s:shellwords(a:1) : []
   for arg in args
       if arg =~ '^\(-i\|--irc\)$\C'
-        let g:codepaste_put_url_to_irc_channel_after_post = 1
+        let codepaste_put_url_to_irc_channel_after_post = 1
       elseif arg =~ '^\(-m\|--multibuffer\)$\C'
         let multibuffer = 1
       elseif arg =~ '^\(-c\|--clipboard\)$\C'
-        let g:codepaste_put_url_to_clipboard_after_post = 1
+        let codepaste_put_url_to_clipboard_after_post = 1
       endif
   endfor
   unlet args
@@ -123,21 +123,23 @@ function! codepaste#Codepaste(count, line1, line2, ...)
 
       " execute post
       let url = s:CodepastePost(content)
-      echo "get url"
 
       " after post
       if len(url) > 0
           " post to irc channel
-          if g:codepaste_put_url_to_irc_channel_after_post == 1
+          if codepaste_put_url_to_irc_channel_after_post == 1
               let res = s:post_irc_channel(g:codepaste_irc_server,
                                          \ g:codepaste_irc_port,
                                          \ g:codepaste_irc_channel,
                                          \ g:codepaste_irc_nickname,
                                          \ url)
               " echo '[info] cannot use irc post yet'
+              if res == 1
+                  echo '[info] Post to '.g:codepaste_irc_channel
+              endif
           endif
           " add to clipboard
-          if g:codepaste_put_url_to_clipboard_after_post == 1
+          if codepaste_put_url_to_clipboard_after_post == 1
               echo '[info] cannot use add clipboard yet'
           endif
       endif
@@ -160,22 +162,13 @@ function! s:CodepastePost(content)
     let nickname = ""
     let title    = ""
     let input    = s:encodeURIComponent(a:content)
-    "let input    = a:content
-
-
-    " make url
-    " let url = 'http://klab.klab.org/cp/store' .
-    "             \ '?nickname=' . nickname .
-    "             \ '&title='    . title .
-    "             \ '&input='    . input
 
     " make url
     let url = ' "http://klab.klab.org/cp/store"'
-    let nickname = ' -d nickname=' . nickname
-    let title    = ' -d title='    . title
-    let input    = ' -d input='    . input
+    let nickname = ' -d "nickname=' . nickname .'"'
+    let title    = ' -d "title='    . title    .'"'
+    let input    = ' -d "input='    . input    .'"'
     let curlcmd = 'curl -i --data-urlencode '. nickname . title . input . url
-    echo curlcmd
 
     " execute curl command
     echo "Postting it to codepaste ..."
@@ -236,39 +229,45 @@ endfunction
 
 " Post to irc channel
 
-function! s:post_irc_channel(server, port, channel, nickname, cpurl)
+function! s:post_irc_channel(server, port, channel, nickname, url)
 
-    echo a:server
-    echo a:port
-    echo a:channel
-    echo a:nickname
-    echo a:url
+    let user = "USER test test test test\n"
+    let nick = "NICK ".a:nickname."\n"
+    let join = "JOIN ".a:channel."\n"
+    let msg  = "PRIVMSG ".a:channel." :".a:url."\n"
+    let part = "PART ".a:channel."\n"
 
-    "
-    let sock = vimproc#socket_open(a:server, a:port)
+    try
 
-    " login
-    call sock.write("GET /HTTP/1.0\r\n\r\n")
-    " join
-    call sock.write("GET /HTTP/1.0\r\n\r\n")
-    " post
-    call sock.write("GET /HTTP/1.0\r\n\r\n")
+        " connect server
+        let sock = vimproc#socket_open(a:server, a:port)
 
-    call sock.close()
-    return 1
+        " login
+        call sock.write(user)
+        call sock.write(nick)
+        call sock.write(join)
 
-    " socket open
-    " let sock = vimproc#socket_open("www.yahoo.com", 80)
-    " call sock.write("GET /HTTP/1.0\r\n\r\n")
-    " let res=""
-    " while !sock.eof
-    "     let res .= sock.read()
-    " endwhile
-    " call sock.close()
-    " for line in split(res, '\r\n\|\r\|\n')
-    "     echo line
-    " endfor
-    " return 1
+        " post
+        call sock.write(msg)
+
+        " leave
+        call sock.write(part)
+
+        " let res = ''
+        " while !sock.eof
+        "     let res .= sock.read()
+        " endwhile
+        " echo res
+
+        " close connection
+        call sock.close()
+        unlet sock
+
+        return 1
+    catch
+        return 0
+    endtry
+
 endfunction
 
 " Complete List
