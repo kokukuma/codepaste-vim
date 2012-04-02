@@ -62,13 +62,24 @@ function! codepaste#Codepaste(count, line1, line2, ...)
   " default options
   if !exists('g:codepaste_put_url_to_clipboard_after_post')
       let codepaste_put_url_to_clipboard_after_post = 0
+  else
+      let codepaste_put_url_to_clipboard_after_post = 
+                  \ g:codepaste_put_url_to_clipboard_after_post
   endif
   if !exists('g:codepaste_curl_options')
       let codepaste_curl_options = ""
+  else
+      let codepaste_curl_options = g:codepaste_curl_options
   endif
   if !exists('g:codepaste_put_url_to_irc_channel_after_post')
       let codepaste_put_url_to_irc_channel_after_post = 0
+  else
+      let codepaste_put_url_to_irc_channel_after_post = 
+                  \ g:codepaste_put_url_to_irc_channel_after_post
   endif
+
+  let codepaste_print_irc_protocol_log = 0
+
 
   " default irc data
   if ! exists('g:codepaste_irc_server')
@@ -78,10 +89,11 @@ function! codepaste#Codepaste(count, line1, line2, ...)
       let g:codepaste_irc_port = 6667
   endif
   if ! exists('g:codepaste_irc_channel')
+      "let g:codepaste_irc_channel = '#gtsubasa'
       let g:codepaste_irc_channel = '#karino'
   endif
   if ! exists('g:codepaste_irc_nickname')
-      let g:codepaste_irc_nickname = 'karino-t'
+      let g:codepaste_irc_nickname = 'codepaste-user'
   endif
 
   " get bufname
@@ -97,6 +109,8 @@ function! codepaste#Codepaste(count, line1, line2, ...)
         let multibuffer = 1
       elseif arg =~ '^\(-c\|--clipboard\)$\C'
         let codepaste_put_url_to_clipboard_after_post = 1
+      elseif arg =~ '^\(-d\|--debug\)$\C'
+        let codepaste_print_irc_protocol_log = 1
       endif
   endfor
   unlet args
@@ -132,10 +146,13 @@ function! codepaste#Codepaste(count, line1, line2, ...)
                                          \ g:codepaste_irc_port,
                                          \ g:codepaste_irc_channel,
                                          \ g:codepaste_irc_nickname,
-                                         \ url)
+                                         \ url,
+                                         \ codepaste_print_irc_protocol_log)
               " echo '[info] cannot use irc post yet'
               if res == 1
                   echo '[info] Post to '.g:codepaste_irc_channel
+              elseif res == 0
+                  echohl ErrorMsg | echomsg '[info] Fail Post to '.g:codepaste_irc_channel | echohl None
               endif
           endif
           " add to clipboard
@@ -229,18 +246,26 @@ endfunction
 
 " Post to irc channel
 
-function! s:post_irc_channel(server, port, channel, nickname, url)
+function! s:post_irc_channel(server, port, channel, nickname, url, print_log_flg)
 
     let user = "USER test test test test\n"
     let nick = "NICK ".a:nickname."\n"
     let join = "JOIN ".a:channel."\n"
     let msg  = "PRIVMSG ".a:channel." :".a:url."\n"
     let part = "PART ".a:channel."\n"
+    let quit = "QUIT : Leaving\n"
+    let result = []
 
     try
 
         " connect server
         let sock = vimproc#socket_open(a:server, a:port)
+        " sockがnullだったらsocket error としてthrowしたかったが、
+        " socket_openの中でthrowしてるっぽい？
+        " 中身読むか
+        " if sock.eof == 0 
+        "     throw "SOCKET ERROR"
+        " endif
 
         " login
         call sock.write(user)
@@ -252,19 +277,52 @@ function! s:post_irc_channel(server, port, channel, nickname, url)
 
         " leave
         call sock.write(part)
+        call sock.write(quit)
 
-        " let res = ''
-        " while !sock.eof
-        "     let res .= sock.read()
-        " endwhile
-        " echo res
+
+        let res = ''
+        while !sock.eof
+            let res .= sock.read()
+            " ホントは,IRCサーバからの戻り値の中に特定の文字
+            " ERRORとかがあったらthrowするようにしたい。
+            "
+            " let rn = stridx(res2,'ERROR')
+            " if rn >= 0
+            "     "echo "throw"
+            "     throw "PROTO ERROR"
+            " endif
+        endwhile
+
+        " check 
+        "let rn = 
+        if res == ''
+            throw "SOCKET ERROR"
+        elseif stridx(res,'JOIN') < 0
+            throw "IRC PROTOCOL ERROR"
+        endif
+
+        " print irc protocol log
+        if a:print_log_flg == 1
+            echo res
+        endif
 
         " close connection
         call sock.close()
         unlet sock
 
         return 1
-    catch
+    catch /SOCKET ERROR/
+        echohl ErrorMsg | echo socket error  | echohl None
+        return 0
+    catch /IRC PROTOCOL ERROR/
+        echohl ErrorMsg | echo res | echohl None
+
+        " close connection
+        call sock.close()
+        unlet sock
+        return 0
+    catch 
+        echohl ErrorMsg | echo "socket error"  | echohl None
         return 0
     endtry
 
@@ -273,7 +331,8 @@ endfunction
 " Complete List
 
 function! codepaste#complete_source(arglead, cmdline, cursorpos)
-   return ['-i','-m','-c']
+   return ['--irc','--debug']
+   "return ['--irc','--debug','--multibuffer','--clipboard']
 endfunction
 
 " what is this ? by karino
